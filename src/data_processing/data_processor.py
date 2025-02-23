@@ -156,26 +156,66 @@ class DataProcessor:
             if not isinstance(text, str):
                 continue
                 
-            # 使用spacy进行分句
-            doc = self.nlp(text)
-            for sent in doc.sents:
-                # 使用jieba分词并保留较长的词组
-                words = jieba.lcut(sent.text)
+            # 更严格的预处理：移除所有数字和加减号
+            clean_text = re.sub(r'[-+]?\d+', '', text).strip()
+            if not clean_text:  # 如果清理后为空，跳过
+                continue
                 
-                # 提取n-gram特征
-                for n in range(1, 4):  # 提取1-3gram
-                    for i in range(len(words)-n+1):
-                        term = ''.join(words[i:i+n])
-                        if (self.config.data.min_term_length <= len(term) <= 
-                            self.config.data.max_term_length):
-                            term_counter[term] = term_counter.get(term, 0) + 1
-                        
-        # 按频率过滤
+            # 使用jieba分词
+            words = jieba.lcut(clean_text)
+            
+            # 提取潜在术语（2-3个词的组合）
+            for n in range(2, 4):
+                for i in range(len(words)-n+1):
+                    term = ''.join(words[i:i+n])
+                    # 严格的过滤规则
+                    if self._is_valid_term(term):
+                        term_counter[term] = term_counter.get(term, 0) + 1
+            
+            # 单独处理可能的单词术语（如"攻击力"）
+            for word in words:
+                if self._is_valid_term(word):
+                    term_counter[word] = term_counter.get(word, 0) + 1
+                    
+        # 按频率过滤，要求更高的最小频率
+        min_freq = max(self.config.data.min_term_freq, 10)  # 提高频率要求
         term_counter = {k: v for k, v in term_counter.items() 
-                       if v >= self.config.data.min_term_freq}
+                       if v >= min_freq}
                        
         self.logger.info(f"提取出 {len(term_counter)} 个术语")
         return term_counter
+        
+    def _is_valid_term(self, term: str) -> bool:
+        """检查是否为有效的游戏术语
+        
+        Args:
+            term: 待检查的术语
+            
+        Returns:
+            bool: 是否为有效术语
+        """
+        # 长度检查
+        if not (self.config.data.min_term_length <= len(term) <= 
+                self.config.data.max_term_length):
+            return False
+            
+        # 必须以中文开头
+        if not re.match(r'^[\u4e00-\u9fff]', term):
+            return False
+            
+        # 不能是纯数字或包含数字
+        if re.search(r'\d', term):
+            return False
+            
+        # 不能只有一个字
+        if len(term) <= 1:
+            return False
+            
+        # 不能包含特殊字符
+        if re.search(r'[^\u4e00-\u9fff]', term):
+            return False
+            
+        return True
 
     def save_term_db(self, term_dict: Dict[str, int]) -> None:
         """保存术语库，使用UTF-8编码确保多语言支持
