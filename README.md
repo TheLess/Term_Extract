@@ -4,7 +4,8 @@
 
 ## 功能特点
 
-- 支持多语言（中文、英文、日文、韩文）
+- 支持多语言（中文、英文 、日语、韩语）
+  - 注：目前只支持中文，其他更多语音在开发中
 - 基于BERT的术语提取
 - 使用LoRA进行模型微调
 - 术语相似度聚类
@@ -147,8 +148,27 @@ python scripts/generate_sample_data.py
    - 在线模式：从Hugging Face下载BERT模型（需要网络连接）
    - 本地模式：从指定路径加载已下载的模型（无需网络连接）
 2. GPU加速需要安装CUDA支持的PyTorch版本
-3. 大型数据集处理可能需要较长时间
-
-## 许可证
+3. 环境配置注意事项：
+   - 稳定环境：
+     - 3.13>python>=3.12 
+     - torch>=2.6.0+cu126
+       - cuda需要与torch版本匹配，详见torch官网，记得cuda装完配置系统环境变量
+     - spacy>=3.8.4
+   - 编译环境相关：
+     - 最好装上以下的依赖库。不然在install各种库时，可能会报很多错：
+       - ninja 
+       - cmake
+       - cython
+     - 其他常见问题（Windows环境）：
+       - gensim / spacy ：
+         - Windows系统报错时，大概率缺少fortran编译环境，推荐安装MSYS mingw64（非python环境）
+         - 配置好MSYS mingw64系统环境后，通过`pacman -S mingw-w64-x86_64-openmp`等命令安装数学计算相关环境
+         - 然后记得把MSYS mingw64的bin | include “目录加入到系统环境变量中
+      - 虚拟环境问题：
+        - conda环境太老时（python版本过低），直接更新conda会失败，卸载conda重新安装
+        - 重新安装conda过程中，如果碰到报错，可能是注册表没清理干净，检查注册表，删除这里：`HKEY_CURRENT_USER\Software\Microsoft\Command Processor`里的`autorun`
+        - 同样如果虚拟环境的python环境升级或降级，会碰到找不到pip相关路径的问题，也和注册表有关，可以尝试删除python相关注册表信息，然后清空环境重新安装
+ 
+ ## 许可证
 
 本项目采用 MIT 许可证
