@@ -104,6 +104,9 @@ class DataProcessor:
         if pd.isna(text):
             return ""
             
+        # 确保文本是字符串类型
+        text = str(text)
+            
         # 移除标点
         if self.config.data.remove_punctuation:
             text = re.sub(r'[^\w\s]', '', text)
