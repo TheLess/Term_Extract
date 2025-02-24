@@ -7,7 +7,7 @@ import shutil
 import json
 
 from config import Config
-from src.data_processing import DataProcessor
+from src.data_processing.data_processor import DataProcessor
 
 class TestDataProcessor(unittest.TestCase):
     @classmethod
@@ -130,6 +130,46 @@ class TestDataProcessor(unittest.TestCase):
                 0,
                 f"Term '{term}' has invalid frequency {freq}"
             )
+            
+    def test_term_extraction_basic(self):
+        """测试基本的术语提取功能"""
+        test_data = pd.DataFrame({
+            'text_clean': [
+                "角色的生命值和攻击力都很高",
+                "这个技能可以恢复生命值",
+                "生命值上限提高了",
+                "攻击力加成效果",
+                "魔法攻击力很强",
+                # 增加更多的测试数据以满足频率要求
+                "生命值恢复效果",
+                "生命值增加",
+                "生命值提升",
+                "攻击力提升",
+                "攻击力增加",
+                "攻击力恢复",
+                "魔法攻击力提升",
+                "魔法攻击力增加",
+                "魔法攻击力恢复"
+            ]
+        })
+        
+        # 使用临时目录进行测试
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.config.data.data_dir = Path(temp_dir)
+            # 临时降低最小频率要求以适应测试
+            self.config.data.min_term_freq = 2
+            terms = self.processor.build_term_corpus(test_data['text_clean'].tolist())
+            
+            # 验证关键术语被正确提取
+            self.assertIn("生命值", terms, "未能提取出'生命值'术语")
+            self.assertIn("攻击力", terms, "未能提取出'攻击力'术语")
+            
+            # 验证术语频率
+            self.assertGreater(terms["生命值"], 2, "'生命值'术语的频率不正确")
+            self.assertGreater(terms["攻击力"], 2, "'攻击力'术语的频率不正确")
+            
+            # 验证复合术语
+            self.assertIn("魔法攻击力", terms, "未能提取出复合术语'魔法攻击力'")
             
     def test_clean_text(self):
         """测试文本清理功能"""

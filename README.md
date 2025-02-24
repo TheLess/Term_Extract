@@ -66,59 +66,79 @@ python main.py --train --input data/sample/sample_translations.xlsx
 
 配置文件位于 `config` 目录：
 
-- `data_config.py`: 数据处理相关配置
-- `model_config.py`: 模型训练相关配置
+- `data_config.py`: 数据处理相关配置（文件路径、数据清理参数等）
+- `model_config.py`: 模型训练相关配置（模型参数、LoRA配置等）
+- `__init__.py`: 配置整合和目录结构初始化
 
 主要配置项：
 
 ```python
-# 数据配置
-data:
-  min_term_length: 2        # 最小术语长度
-  max_term_length: 20       # 最大术语长度
-  min_frequency: 2          # 最小出现频率
-  clean_punctuation: true   # 是否清理标点符号
-  remove_numbers: true      # 是否移除数字
-  custom_filters: []        # 自定义过滤规则
+# 数据配置 (data_config.py)
+class DataConfig:
+    def __init__(self):
+        self.data_dir = Path('data')
+        self.translations_file = self.data_dir / 'translations.xlsx'
+        self.term_db_file = self.data_dir / 'term_database.json'
+        
+        # 数据处理参数
+        self.min_term_length = 2    # 最小术语长度
+        self.min_term_freq = 2      # 最小术语频率
+        self.max_term_length = 10   # 最大术语长度
+        
+        # 数据清理参数
+        self.remove_punctuation = True   # 是否移除标点
+        self.remove_numbers = False      # 是否移除数字
+        self.lowercase = False           # 是否转小写（针对英文）
 
-# 模型配置
-model:
-  base_model_name: "bert-base-chinese"  # 在线模型名称
-  local_model_path: "path/to/model"     # 本地模型路径（可选）
-  use_local_model: false                # 是否使用本地模型
-  train_batch_size: 32                  # 训练批次大小
-  num_train_epochs: 3                   # 训练轮数
-  learning_rate: 2e-5                   # 学习率
-  warmup_ratio: 0.1                     # 预热比例
-  lora:                                 # LoRA配置
-    r: 8                               # LoRA秩
-    alpha: 16                          # LoRA alpha
-    dropout: 0.1                       # LoRA dropout
+# 模型配置 (model_config.py)
+class ModelConfig:
+    def __init__(self):
+        self.bert = {
+            'name': 'hfl/chinese-macbert-large',  # 在线模型名称
+            'local_path': Path('models/chinese-macbert-large'),  # 本地模型路径
+            'use_local': True,  # 是否使用本地模型
+        }
+        
+        # LoRA配置
+        self.lora = {
+            'r': 8,              # LoRA秩
+            'alpha': 32,         # LoRA alpha参数
+            'dropout': 0.1,      # Dropout率
+            'bias': 'none',      # 是否使用偏置项
+            'target_modules': ['query', 'value']  # 目标模块
+        }
 ```
 
 ## 项目结构
 
 ```
 project/
-├── config/           # 配置文件
-├── data/            # 数据文件
-│   └── sample/      # 示例数据
-├── src/             # 源代码
+├── config/                 # 配置文件
+│   ├── __init__.py        # 配置整合
+│   ├── data_config.py     # 数据处理配置
+│   └── model_config.py    # 模型配置
+├── data/                  # 数据文件
+│   └── sample/           # 示例数据
+├── src/                   # 源代码
 │   ├── data_processing/  # 数据处理模块
-│   │   ├── data_processor.py    # 数据处理核心
-│   │   └── term_extractor.py    # 术语提取器
-│   └── model/           # 模型训练模块
-│       ├── trainer.py          # 模型训练器
-│       └── embeddings.py       # 词向量处理
-├── outputs/         # 输出文件
-│   ├── models/     # 保存的模型
-│   ├── terms/      # 术语库
-│   └── logs/       # 日志文件
-├── scripts/         # 实用脚本
-├── tests/           # 测试文件
+│   │   ├── __init__.py
+│   │   └── data_processor.py  # 数据处理核心
+│   └── model/            # 模型训练模块
+│       ├── __init__.py
+│       └── trainer.py    # 模型训练器
+├── outputs/              # 输出文件
+│   ├── models/          # 保存的模型
+│   ├── terms/           # 术语库
+│   └── logs/            # 日志文件
+├── scripts/              # 实用脚本
+│   └── generate_sample_data.py  # 示例数据生成
+├── tests/               # 测试文件
+│   ├── __init__.py
+│   ├── conftest.py     # pytest配置
 │   ├── test_data_processor.py  # 数据处理测试
 │   └── test_model_trainer.py   # 模型训练测试
-└── main.py         # 主程序
+├── requirements.txt     # 项目依赖
+└── main.py             # 主程序
 ```
 
 ## 使用示例
@@ -194,7 +214,14 @@ python -m pytest tests/
 ### 运行测试
 
 ```bash
-python -m unittest discover tests
+# 运行所有测试
+python -m pytest
+
+# 运行特定测试文件
+python -m pytest tests/test_data_processor.py
+
+# 运行特定测试类或方法
+python -m pytest tests/test_data_processor.py::TestDataProcessor::test_term_extraction_basic
 ```
 
 ### 生成示例数据

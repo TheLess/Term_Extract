@@ -180,8 +180,8 @@ class DataProcessor:
                 if self._is_valid_term(word):
                     term_counter[word] = term_counter.get(word, 0) + 1
                     
-        # 按频率过滤，要求更高的最小频率
-        min_freq = max(self.config.data.min_term_freq, 10)  # 提高频率要求
+        # 使用配置中的最小频率
+        min_freq = self.config.data.min_term_freq
         term_counter = {k: v for k, v in term_counter.items() 
                        if v >= min_freq}
                        
