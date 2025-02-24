@@ -73,12 +73,29 @@ class TermExtractor:
         Args:
             args: 命令行参数
         """
+        # 更新输入输出路径
         self.config.data.translations_file = Path(args.input)
-        self.config.data.term_db_file = Path(args.output)
-        self.config.data.min_term_freq = args.min_freq
-        self.config.data.min_term_length = args.min_length
-        self.config.data.max_term_length = args.max_length
-        
+        if args.output:
+            self.config.data.term_db_file = Path(args.output)
+            # 确保输出目录存在
+            self.config.data.term_db_file.parent.mkdir(parents=True, exist_ok=True)
+        if args.output_dir:
+            self.config.output_dir = Path(args.output_dir)
+            
+        # 更新模型配置
+        if args.use_local_model:
+            self.config.model.use_local_model = True
+            if args.local_model_path:
+                self.config.model.local_model_path = Path(args.local_model_path)
+                
+        # 更新术语提取参数
+        if args.min_freq:
+            self.config.data.min_term_freq = args.min_freq
+        if args.min_length:
+            self.config.data.min_term_length = args.min_length
+        if args.max_length:
+            self.config.data.max_term_length = args.max_length
+            
     def run(self, skip_training: bool = False) -> Optional[Dict[str, int]]:
         """运行术语提取流程
         

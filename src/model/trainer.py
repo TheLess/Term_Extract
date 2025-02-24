@@ -1,4 +1,4 @@
-from transformers import AutoModelForMaskedLM, AutoTokenizer, TrainingArguments, Trainer
+from transformers import AutoModelForMaskedLM, AutoTokenizer, TrainingArguments, Trainer, DataCollatorForLanguageModeling
 import torch
 from peft import LoraConfig, get_peft_model
 import numpy as np
@@ -47,32 +47,36 @@ class ModelTrainer:
     def _init_model_and_tokenizer(self):
         """初始化模型和分词器"""
         try:
-            # 确定模型来源
-            if self.config.model.use_local_model and self.config.model.local_model_path:
-                model_path = self.config.model.local_model_path
+            # 初始化分词器
+            if self.config.model.bert['use_local']:
+                model_path = self.config.model.bert['local_path']
+                if not model_path.exists():
+                    self.logger.warning(f"本地模型路径不存在: {model_path}")
+                    raise OSError(f"找不到本地模型: {model_path}")
+                self.tokenizer = AutoTokenizer.from_pretrained(str(model_path))
+                self.model = AutoModelForMaskedLM.from_pretrained(str(model_path))
                 self.logger.info(f"从本地加载模型: {model_path}")
-                if not Path(model_path).exists():
-                    raise FileNotFoundError(f"本地模型路径不存在: {model_path}")
             else:
-                model_path = self.config.model.base_model_name
-                self.logger.info(f"从Hugging Face下载模型: {model_path}")
-            
-            # 加载分词器和模型
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-            model = AutoModelForMaskedLM.from_pretrained(model_path)
-            
+                model_name = self.config.model.bert['name']
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.model = AutoModelForMaskedLM.from_pretrained(model_name)
+                self.logger.info(f"在线加载模型: {model_name}")
+
             # 配置LoRA
-            self.lora_config = LoraConfig(
-                r=self.config.model.lora_r,
-                lora_alpha=self.config.model.lora_alpha,
-                target_modules=self.config.model.lora_target_modules,
-                lora_dropout=self.config.model.lora_dropout,
-                bias="none",
-                task_type="CAUSAL_LM"  # 适用于MacBERT
+            peft_config = LoraConfig(
+                r=self.config.model.lora['r'],
+                lora_alpha=self.config.model.lora['alpha'],
+                target_modules=self.config.model.lora['target_modules'],
+                lora_dropout=self.config.model.lora['dropout'],
+                bias=self.config.model.lora['bias']
             )
             
-            self.model = get_peft_model(model, self.lora_config)
+            # 应用LoRA配置
+            self.model = get_peft_model(self.model, peft_config)
+            
+            # 移动模型到指定设备
             self.model.to(self.device)
+            self.logger.info(f"使用设备: {self.device}")
             
         except Exception as e:
             self.logger.error(f"模型初始化失败: {str(e)}")
@@ -93,48 +97,38 @@ class ModelTrainer:
                 return None
                 
             term_dict = df['text_clean'].value_counts().to_dict()
+            max_length = 256  # 减小序列长度以节省内存
             
             def tokenize_and_mask(examples):
                 texts = examples['text_clean']
                 if not isinstance(texts, list):
                     texts = [texts]
                 
-                all_input_ids = []
-                all_labels = []
+                # 使用tokenizer的batch处理功能
+                tokenized = self.tokenizer(
+                    texts,
+                    padding='max_length',
+                    truncation=True,
+                    max_length=max_length,
+                    return_tensors='pt'
+                )
                 
-                for text in texts:
-                    if pd.isna(text):
-                        text = ""
-                    tokens = self.tokenizer.tokenize(str(text))
-                    masked_tokens = []
-                    labels = []
-                    
-                    for token in tokens:
-                        if token in term_dict and np.random.rand() < self.config.model.mask_probability:
-                            masked_tokens.append('[MASK]')
-                            labels.append(self.tokenizer.convert_tokens_to_ids(token))
-                        else:
-                            masked_tokens.append(token)
-                            labels.append(-100)
-                    
-                    # 确保序列长度一致
-                    input_ids = self.tokenizer.convert_tokens_to_ids(masked_tokens)
-                    if len(input_ids) > 512:  # BERT的最大序列长度
-                        input_ids = input_ids[:512]
-                        labels = labels[:512]
-                    
-                    all_input_ids.append(input_ids)
-                    all_labels.append(labels)
+                input_ids = tokenized['input_ids'].tolist()
+                attention_mask = tokenized['attention_mask'].tolist()
+                labels = [[token_id if (token_id != self.tokenizer.pad_token_id and np.random.rand() < 0.15) else -100 
+                          for token_id in sequence] for sequence in input_ids]
                 
                 return {
-                    'input_ids': all_input_ids,
-                    'labels': all_labels
+                    'input_ids': input_ids,
+                    'attention_mask': attention_mask,
+                    'labels': labels
                 }
             
             dataset = datasets.Dataset.from_pandas(df)
             processed_dataset = dataset.map(
                 tokenize_and_mask,
                 batched=True,
+                batch_size=32,  # 添加batch_size限制
                 remove_columns=dataset.column_names
             )
             
@@ -161,29 +155,39 @@ class ModelTrainer:
                 
             # 设置训练参数
             training_args = TrainingArguments(
-                output_dir=str(self.config.model_dir),
-                num_train_epochs=self.config.model.num_train_epochs,
-                per_device_train_batch_size=self.config.model.train_batch_size,
-                learning_rate=self.config.model.learning_rate,
-                logging_dir=str(self.config.logs_dir),
+                output_dir=str(self.config.output_dir / "checkpoints"),
+                num_train_epochs=self.config.model.training['num_epochs'],
+                per_device_train_batch_size=4,  # 减小批量大小
+                gradient_accumulation_steps=4,  # 添加梯度累积
+                learning_rate=self.config.model.training['learning_rate'],
+                warmup_steps=self.config.model.training['warmup_steps'],
+                max_grad_norm=self.config.model.training['max_grad_norm'],
+                weight_decay=self.config.model.training['weight_decay'],
+                logging_dir=str(self.config.output_dir / "logs"),
                 logging_steps=10,
-                save_strategy="epoch",
-                warmup_ratio=self.config.model.warmup_ratio,
-                seed=self.config.model.random_seed
+                save_strategy="no",
+                remove_unused_columns=False,
+                fp16=True  # 启用混合精度训练
             )
             
             trainer = Trainer(
                 model=self.model,
                 args=training_args,
-                train_dataset=encoded_data
+                train_dataset=encoded_data,
+                data_collator=DataCollatorForLanguageModeling(
+                    tokenizer=self.tokenizer,
+                    mlm=True,
+                    mlm_probability=0.15
+                )
             )
             
             self.logger.info("开始训练模型...")
             trainer.train()
             
             # 保存模型
-            save_path = self.config.model_dir / 'final_model'
-            self.model.save_pretrained(save_path)
+            save_path = self.config.output_dir / 'models' / 'final_model'
+            save_path.mkdir(parents=True, exist_ok=True)
+            self.model.save_pretrained(str(save_path))
             self.logger.info(f"模型已保存到: {save_path}")
             
             return True
@@ -202,18 +206,29 @@ class ModelTrainer:
             Optional[np.ndarray]: 术语向量矩阵，shape为(len(terms), hidden_size)
         """
         try:
-            # 将术语转换为模型输入
-            inputs = self.tokenizer(terms, return_tensors='pt', padding=True, truncation=True)
-            inputs = {k: v.to(self.device) for k, v in inputs.items()}
+            # 对术语进行编码
+            encoded = self.tokenizer(
+                terms,
+                padding=True,
+                truncation=True,
+                max_length=256,  # 使用与训练时相同的最大长度
+                return_tensors='pt'
+            )
             
-            # 获取BERT的输出
+            # 将数据移动到正确的设备
+            input_ids = encoded['input_ids'].to(self.device)
+            attention_mask = encoded['attention_mask'].to(self.device)
+            
+            # 获取模型输出
             with torch.no_grad():
-                outputs = self.model(**inputs, output_hidden_states=True)
+                outputs = self.model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    output_hidden_states=True
+                )
                 
-            # 使用最后一层隐藏状态的第一个token ([CLS]) 作为句子表示
-            last_hidden_state = outputs.hidden_states[-1]
-            embeddings = last_hidden_state[:, 0, :].cpu().numpy()
-            
+            # 使用最后一层的[CLS]向量作为术语表示
+            embeddings = outputs.hidden_states[-1][:, 0, :].cpu().numpy()
             return embeddings
             
         except Exception as e:

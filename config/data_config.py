@@ -13,8 +13,12 @@ class DataConfig:
         self.max_term_length = 10 # 最大术语长度
         
         # 必需的列名
-        self.source_lang_col = '简体中文'
-        self.target_lang_cols = ['English', '日本語', '한국어']  # 支持的目标语言
+        self.source_lang_col = 'CN'     #简中
+        self.target_lang_cols = [
+            'EN',   # 英语
+            #'JP',   # 日语
+            #'KR',   # 韩语
+        ]  # 支持的目标语言
         
         # 数据清理参数
         self.remove_punctuation = True  # 是否移除标点

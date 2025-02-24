@@ -3,21 +3,34 @@ from pathlib import Path
 class ModelConfig:
     def __init__(self):
         # 模型基本配置
-        self.base_model_name = 'hfl/chinese-macbert-large'  # 在线模型名称
-        self.local_model_path = Path(r'E:\CyberLife\models\chinese-macbert-large')  # 本地模型路径，如果设置则优先使用本地模型
-        self.use_local_model = True  # 是否使用本地模型
+        self.bert = {
+            'name': 'hfl/chinese-macbert-large',  # 在线模型名称
+            'local_path': Path(r'models\chinese-macbert-large'),  # 本地模型路径
+            'use_local': True,  # 是否使用本地模型
+        }
+        
+        # Spacy模型配置
+        self.spacy = {
+            'name': 'zh_core_web_sm',  # spacy中文模型
+            'local_path': Path(r'models\spacy\zh_core_web_sm'),  # 本地模型路径
+            'use_local': True,  # 是否使用本地模型
+        }
         
         # LoRA配置
-        self.lora_r = 16
-        self.lora_alpha = 32
-        self.lora_dropout = 0.1
-        self.lora_target_modules = ["query", "value", "key"]
+        self.lora = {
+            'r': 8,              # LoRA秩
+            'alpha': 32,         # LoRA alpha参数
+            'dropout': 0.1,      # Dropout率
+            'bias': 'none',      # 是否使用偏置项
+            'target_modules': ['query', 'value']  # 目标模块
+        }
         
         # 训练配置
-        self.train_batch_size = 32 
-        self.num_train_epochs = 3
-        self.learning_rate = 2e-5
-        self.warmup_ratio = 0.1
-        self.random_seed = 42
-        self.mask_probability = 0.3
-        self.min_cluster_size = 5
+        self.training = {
+            'batch_size': 32,
+            'learning_rate': 2e-4,
+            'num_epochs': 3,
+            'warmup_steps': 500,
+            'max_grad_norm': 1.0,
+            'weight_decay': 0.01
+        }
