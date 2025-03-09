@@ -50,6 +50,9 @@ class ModelTrainer:
             # 初始化分词器
             if self.config.model.bert['use_local']:
                 model_path = self.config.model.bert['local_path']
+                # 确保model_path是Path对象
+                if isinstance(model_path, str):
+                    model_path = Path(model_path)
                 if not model_path.exists():
                     self.logger.warning(f"本地模型路径不存在: {model_path}")
                     raise OSError(f"找不到本地模型: {model_path}")
@@ -247,7 +250,12 @@ class ModelTrainer:
         """
         try:
             if n_clusters is None:
-                n_clusters = max(2, min(len(embeddings) // 2, 5))
+                # 更合理的聚类数量计算，确保大型术语集不会被过度聚类
+                n_samples = len(embeddings)
+                # 使用术语数量的平方根作为基准，但有最小和最大限制
+                n_clusters = min(max(int(np.sqrt(n_samples)), 5), n_samples // 2)
+                # 确保至少有2个聚类
+                n_clusters = max(2, n_clusters)
                 
             from sklearn.cluster import KMeans
             kmeans = KMeans(n_clusters=n_clusters, random_state=42)
@@ -273,6 +281,8 @@ class ModelTrainer:
             if len(terms) < 2:
                 return term_dict.copy()
                 
+            self.logger.info(f"优化前术语数量: {len(terms)}")
+                
             # 获取术语向量
             embeddings = self._get_term_embeddings(terms)
             if embeddings is None:
@@ -283,6 +293,10 @@ class ModelTrainer:
             if clusters is None:
                 return term_dict.copy()
                 
+            # 记录聚类数量
+            unique_clusters = len(set(clusters))
+            self.logger.info(f"聚类数量: {unique_clusters}")
+                
             # 合并相似术语
             refined_terms = {}
             cluster_terms = {}
@@ -292,19 +306,35 @@ class ModelTrainer:
                 if cluster not in cluster_terms:
                     cluster_terms[cluster] = []
                 cluster_terms[cluster].append(term)
+            
+            # 打印每个聚类中的术语数量    
+            cluster_sizes = {cluster: len(terms) for cluster, terms in cluster_terms.items()}
+            self.logger.info(f"聚类大小分布: {cluster_sizes}")
                 
-            # 在每个聚类中选择频率最高的术语作为代表
+            # 改进的术语选择策略：
+            # 对于小聚类（<=5个术语）保留所有术语
+            # 对于中等聚类（6-20个术语）保留频率最高的前3个
+            # 对于大聚类（>20个术语）保留频率最高的前5个
             for cluster, cluster_term_list in cluster_terms.items():
-                if len(cluster_term_list) == 1:
-                    term = cluster_term_list[0]
-                    refined_terms[term] = term_dict[term]
+                if len(cluster_term_list) <= 5:
+                    # 保留小聚类中的所有术语
+                    for term in cluster_term_list:
+                        refined_terms[term] = term_dict[term]
                 else:
-                    # 选择频率最高的术语
-                    representative_term = max(cluster_term_list, key=lambda x: term_dict[x])
-                    # 合并频率
-                    total_freq = sum(term_dict[term] for term in cluster_term_list)
-                    refined_terms[representative_term] = total_freq
+                    # 按频率排序术语
+                    sorted_terms = sorted(cluster_term_list, key=lambda x: term_dict[x], reverse=True)
                     
+                    # 确定要保留的术语数量
+                    if len(cluster_term_list) <= 20:
+                        keep_count = min(3, len(sorted_terms))
+                    else:
+                        keep_count = min(5, len(sorted_terms))
+                        
+                    # 保留高频术语
+                    for term in sorted_terms[:keep_count]:
+                        refined_terms[term] = term_dict[term]
+            
+            self.logger.info(f"优化后术语数量: {len(refined_terms)}")
             return refined_terms
             
         except Exception as e:

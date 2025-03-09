@@ -1,0 +1,39 @@
+{
+  "translations_file": "data/translations.xlsx",
+  "term_db_file": "outputs/terms/term_database.json",
+  "min_term_length": 2,
+  "max_term_length": 10,
+  "min_term_freq": 2,
+  "source_lang_col": "CN",
+  "target_lang_cols": ["EN"],
+  "remove_punctuation": true,
+  "remove_numbers": false,
+  "lowercase": false,
+  "bert": {
+    "name": "hfl/chinese-macbert-large",
+    "local_path": "models/chinese-macbert-large",
+    "use_local": true
+  },
+  "spacy": {
+    "name": "zh_core_web_sm",
+    "local_path": "models/spacy/zh_core_web_sm",
+    "use_local": true
+  },
+  "lora": {
+    "r": 8,
+    "alpha": 32,
+    "dropout": 0.1,
+    "bias": "none",
+    "target_modules": ["query", "value"]
+  },
+  "training": {
+    "batch_size": 32,
+    "learning_rate": 0.0002,
+    "num_epochs": 3,
+    "warmup_steps": 500,
+    "max_grad_norm": 1.0,
+    "weight_decay": 0.01
+  },
+  "train_model": true,
+  "log_level": "INFO"
+}

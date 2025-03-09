@@ -47,6 +47,9 @@ class DataProcessor:
         try:
             if self.config.model.spacy['use_local']:
                 model_path = self.config.model.spacy['local_path']
+                # 确保model_path是Path对象
+                if isinstance(model_path, str):
+                    model_path = Path(model_path)
                 if not model_path.exists():
                     self.logger.warning(f"本地模型路径不存在: {model_path}")
                     raise OSError(f"找不到本地模型: {model_path}")
