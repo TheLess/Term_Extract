@@ -41,6 +41,7 @@ logs/
 # Model files and data
 models/
 data/
+outputs/terms/
 
 # Jupyter Notebook
 .ipynb_checkpoints
