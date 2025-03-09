@@ -39,7 +39,7 @@ class Config:
         # 术语提取配置
         self.data.min_term_length = 2     # 最小术语长度
         self.data.max_term_length = 10    # 最大术语长度
-        self.data.min_term_freq = 2       # 最小术语频率
+        self.data.min_term_freq = 1       # 最小术语频率
         
         # 数据列名配置
         self.data.source_lang_col = 'CN'  # 默认源语言列名
@@ -82,6 +82,12 @@ class Config:
             'warmup_steps': 500,     # 预热步数
             'max_grad_norm': 1.0,    # 梯度裁剪
             'weight_decay': 0.01     # 权重衰减
+        }
+        
+        # 术语优化配置
+        self.model.term_refinement = {
+            'optimization_rounds': 1,  # 术语优化轮次 (默认降低为1轮，避免术语过度损失)
+            'preserve_top_terms': True  # 是否保留高频术语
         }
         
         # 保留原来的属性以保持向后兼容

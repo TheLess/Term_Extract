@@ -143,7 +143,8 @@ class TermExtractor:
                 
                 # 迭代优化术语
                 self.logger.info("开始优化术语...")
-                for epoch in range(3):
+                optimization_rounds = self.config.model.term_refinement['optimization_rounds']
+                for epoch in range(optimization_rounds):
                     self.logger.info(f"第 {epoch + 1} 轮优化...")
                     refined_terms = self.trainer.refine_terms(initial_terms)
                     initial_terms = refined_terms
